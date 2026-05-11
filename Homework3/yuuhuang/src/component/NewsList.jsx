@@ -22,6 +22,12 @@ export function NewsList({ ticker }) {
             const res = await fetch(`/data/stocknews/${ticker}/${encodeURIComponent(filename)}`);
             if (!res.ok) continue;
             const text = await res.text();
+
+            if (text.includes("<!doctype html") || text.includes("<title>")) {
+              console.warn("Skipping HTML page returned instead of news file:", filename);
+              continue;
+            }
+
             loaded.push(parseArticle(text, filename));
           } catch { continue; }
         }
@@ -110,6 +116,20 @@ export function NewsList({ ticker }) {
   );
 }
 
+// Strip HTML tags and decode common HTML entities
+function stripHtml(str) {
+  return str
+    .replace(/<[^>]*>/g, " ")           // remove all HTML tags
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s{2,}/g, " ")            // collapse multiple spaces
+    .trim();
+}
+
 function parseArticle(text, filename) {
   const lines = text.split("\n");
   const result = { title: "", date: "", url: "", content: "" };
@@ -129,6 +149,9 @@ function parseArticle(text, filename) {
   }
   if (!result.date) result.date = filename.slice(0, 10);
 
-  result.content = lines.slice(contentStart).join("\n").trim();
+  // Strip HTML from content in case Selenium grabbed raw page source
+  const rawContent = lines.slice(contentStart).join("\n").trim();
+  result.content = stripHtml(rawContent);
+
   return result;
 }
